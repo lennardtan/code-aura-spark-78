@@ -75,7 +75,17 @@
   }
 }
 
+/* Custom scrollbar styling */
 @layer components {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;           /* Chrome, Safari, Opera */
+  }
+
   /* Glowing Input Component */
   .input-glow {
     @apply relative overflow-hidden;
@@ -137,6 +147,15 @@
   .sidebar-item-active::before {
     content: '';
     @apply absolute left-0 top-0 bottom-0 w-1 bg-primary;
+  }
+
+  /* Callout styling for editor */
+  .callout {
+    @apply p-4 rounded-lg border-l-4 border-primary bg-primary/5 my-4;
+  }
+  
+  .callout p {
+    @apply m-0 text-foreground;
   }
 }
 
