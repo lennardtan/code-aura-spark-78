@@ -14,7 +14,6 @@ import {
   List,
   ListOrdered,
   ImageIcon,
-  Palette,
   Save,
   Share2,
   Users,
@@ -40,6 +39,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DocumentTabs } from "@/components/DocumentTab";
 import { SlashCommandMenu } from "@/components/SlashCommandMenu";
 import { CollaboratorCursors, CollaboratorSelections } from "@/components/CollaboratorCursors";
+import { ColorPicker } from "@/components/ColorPicker";
 import { cn } from "@/lib/utils";
 
 interface DocumentationEditorProps {
@@ -56,9 +56,7 @@ interface DocumentTab {
 }
 
 const collaborators = [
-  { id: "1", name: "Sarah Chen", avatar: "SC", color: "#3B82F6" },
-  { id: "2", name: "Mike Johnson", avatar: "MJ", color: "#10B981" },
-  { id: "3", name: "Alex Rivera", avatar: "AR", color: "#8B5CF6" }
+  { id: "1", name: "Sarah Chen", avatar: "SC", color: "#3B82F6" }
 ];
 
 const aiSuggestions = [
@@ -110,11 +108,8 @@ export const DocumentationEditor = ({ documentId, onBack }: DocumentationEditorP
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [slashSearchQuery, setSlashSearchQuery] = useState("");
   
-  // Collaboration
-  const [cursorPositions, setCursorPositions] = useState([
-    { userId: "2", x: 300, y: 200, visible: true },
-    { userId: "3", x: 450, y: 350, visible: true }
-  ]);
+  // Collaboration  
+  const [cursorPositions, setCursorPositions] = useState([]);
   const [selections, setSelections] = useState([]);
   
   // Context menu
@@ -518,14 +513,10 @@ export const DocumentationEditor = ({ documentId, onBack }: DocumentationEditorP
                   <ImageIcon className="h-4 w-4" />
                 </Button>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().setColor('#3B82F6').run()}
-                  className="hover:bg-muted"
-                >
-                  <Palette className="h-4 w-4" />
-                </Button>
+                <ColorPicker
+                  onColorSelect={(color) => editor.chain().focus().setColor(color).run()}
+                  currentColor={editor.getAttributes('textStyle').color}
+                />
               </div>
             </div>
 

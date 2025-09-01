@@ -12,12 +12,18 @@ import {
   ExternalLink,
   CheckCircle,
   Loader2,
-  Search
+  Search,
+  RefreshCw,
+  AlertCircle,
+  Github
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const sampleRepos = [
   "https://github.com/microsoft/vscode",
@@ -47,6 +53,13 @@ interface RepoDigest {
   files: FileDigest[];
   structure: string[];
   summary: string;
+  metadata?: {
+    stars: number;
+    forks: number;
+    language: string;
+    lastUpdated: string;
+    branches: number;
+  };
 }
 
 export const ExploreView = () => {
@@ -56,42 +69,94 @@ export const ExploreView = () => {
   const [selectedFile, setSelectedFile] = useState<FileDigest | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [chatQuery, setChatQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleIngestRepo = async () => {
     if (!repoUrl.trim()) return;
     
     setIsProcessing(true);
-    // Simulate API call
-    setTimeout(() => {
-      const mockDigest: RepoDigest = {
-        name: "sample-project",
-        description: "A sample repository for demonstration",
-        files: [
-          {
-            path: "src/index.js",
-            content: "// Main application entry point\nconst app = require('./app');\napp.listen(3000);",
-            size: 1024,
-            type: "javascript"
-          },
-          {
-            path: "package.json",
-            content: '{\n  "name": "sample-project",\n  "version": "1.0.0"\n}',
-            size: 512,
-            type: "json"
-          },
-          {
-            path: "README.md",
-            content: "# Sample Project\n\nThis is a demonstration project.",
-            size: 256,
-            type: "markdown"
-          }
-        ],
-        structure: ["src/", "package.json", "README.md"],
-        summary: "A Node.js web application with standard project structure including source files, configuration, and documentation."
+    setDigest(null);
+    
+    try {
+      // Extract repo info from URL
+      const urlParts = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!urlParts) {
+        throw new Error('Invalid GitHub URL format');
+      }
+      
+      const [, owner, repo] = urlParts;
+      const cleanRepo = repo.replace(/\.git$/, '');
+      
+      // Fetch repository information
+      const [repoResponse, contentsResponse, branchesResponse] = await Promise.all([
+        fetch(`https://api.github.com/repos/${owner}/${cleanRepo}`),
+        fetch(`https://api.github.com/repos/${owner}/${cleanRepo}/contents`),
+        fetch(`https://api.github.com/repos/${owner}/${cleanRepo}/branches`)
+      ]);
+      
+      if (!repoResponse.ok) {
+        throw new Error('Repository not found or not accessible');
+      }
+      
+      const repoData = await repoResponse.json();
+      const contentsData = await contentsResponse.json();
+      const branchesData = await branchesResponse.json();
+      
+      // Fetch file contents for key files
+      const files: FileDigest[] = [];
+      const keyFiles = contentsData.filter((item: any) => 
+        item.type === 'file' && 
+        (item.name.endsWith('.md') || 
+         item.name === 'package.json' || 
+         item.name.endsWith('.js') || 
+         item.name.endsWith('.ts') ||
+         item.name.endsWith('.json'))
+      ).slice(0, 10); // Limit to first 10 files
+      
+      for (const file of keyFiles) {
+        try {
+          const fileResponse = await fetch(file.download_url);
+          const content = await fileResponse.text();
+          files.push({
+            path: file.name,
+            content: content.slice(0, 2000), // Limit content length
+            size: file.size,
+            type: file.name.split('.').pop() || 'unknown'
+          });
+        } catch (error) {
+          console.error(`Failed to fetch ${file.name}:`, error);
+        }
+      }
+      
+      const repoDigest: RepoDigest = {
+        name: repoData.name,
+        description: repoData.description || 'No description available',
+        files,
+        structure: contentsData.map((item: any) => item.name),
+        summary: `${repoData.name} is a ${repoData.language || 'multi-language'} repository with ${repoData.stargazers_count} stars and ${repoData.forks_count} forks. Last updated: ${new Date(repoData.updated_at).toLocaleDateString()}. ${branchesData.length} branches available.`,
+        metadata: {
+          stars: repoData.stargazers_count,
+          forks: repoData.forks_count,
+          language: repoData.language,
+          lastUpdated: repoData.updated_at,
+          branches: branchesData.length
+        }
       };
-      setDigest(mockDigest);
+      
+      setDigest(repoDigest);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching repository:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch repository');
+    } finally {
       setIsProcessing(false);
-    }, 2000);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (repoUrl.trim()) {
+      handleIngestRepo();
+    }
   };
 
   const toggleFolder = (path: string) => {
@@ -196,13 +261,49 @@ export const ExploreView = () => {
           </div>
         </Card>
 
+        {/* Error Display */}
+        {error && (
+          <Alert className="max-w-4xl mx-auto mb-6 border-destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-destructive">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Digest Results */}
         {digest && (
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-foreground">{digest.name}</h2>
-                <p className="text-muted-foreground">{digest.description}</p>
+              <div className="flex items-center gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-2xl font-bold text-foreground">{digest.name}</h2>
+                    <Button
+                      variant="ghost" 
+                      size="sm"
+                      onClick={handleRefresh}
+                      disabled={isProcessing}
+                      className="text-muted-foreground hover:text-primary"
+                    >
+                      <RefreshCw className={cn("h-4 w-4", isProcessing && "animate-spin")} />
+                    </Button>
+                  </div>
+                  <p className="text-muted-foreground">{digest.description}</p>
+                  {digest.metadata && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <Github className="h-3 w-3" />
+                        {digest.metadata.stars} stars
+                      </Badge>
+                      <Badge variant="outline">{digest.metadata.forks} forks</Badge>
+                      {digest.metadata.language && (
+                        <Badge variant="outline">{digest.metadata.language}</Badge>
+                      )}
+                      <Badge variant="outline">{digest.metadata.branches} branches</Badge>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button
